@@ -66,6 +66,23 @@
     .toggles{gap:10px;font-size:.8rem;}
   }
 </style>
+<!-- Google Analytics 4 (Leeway Rides) — measurement ID filled in at install -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-8Z82NGV6BC"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-8Z82NGV6BC');
+document.addEventListener('click', function(e){
+  var a = e.target.closest ? e.target.closest('a') : null;
+  if(!a || !a.href) return;
+  var method = null;
+  if(a.href.indexOf('tel:') === 0) method = 'call';
+  else if(a.href.indexOf('sms:') === 0) method = 'text';
+  else if(a.href.indexOf('wa.me') > -1) method = 'whatsapp';
+  if(method && window.gtag){ gtag('event', 'contact_click', {method: method, page_path: location.pathname}); }
+});
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -548,6 +565,7 @@
       btn.textContent=T[lang].sentBtn;
       summaryEl.querySelectorAll('input,textarea,select').forEach(function(el){ el.disabled=true; });
       var m=$('sentMsg'); m.style.display='block';
+      if(window.gtag){ gtag('event', 'hey_lee_submission', {page_path: location.pathname}); }
       if(kind==='callback'){ m.innerHTML=T[lang].sentCb; leeSay(T[lang].sentCbSay); }
       else { m.innerHTML=T[lang].sentBooking; leeSay(T[lang].sentBookingSay); }
       mode='done';

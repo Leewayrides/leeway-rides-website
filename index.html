@@ -105,6 +105,23 @@
   <meta name="twitter:title" content="Leeway Rides | Home - Safe. Reliable. Connected.">
   <meta name="twitter:description" content="Leeway Rides provides pre-scheduled non-emergency medical transportation, airport rides to Charlotte Douglas, daily and weekly work transportation, and personal trips in Shelby, Kings Mountain, Gastonia, and Western NC. Book in advance: 980-470-7973.">
   <meta name="twitter:image" content="https://leewayrides.com/7689.png">
+<!-- Google Analytics 4 (Leeway Rides) — measurement ID filled in at install -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-8Z82NGV6BC"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-8Z82NGV6BC');
+document.addEventListener('click', function(e){
+  var a = e.target.closest ? e.target.closest('a') : null;
+  if(!a || !a.href) return;
+  var method = null;
+  if(a.href.indexOf('tel:') === 0) method = 'call';
+  else if(a.href.indexOf('sms:') === 0) method = 'text';
+  else if(a.href.indexOf('wa.me') > -1) method = 'whatsapp';
+  if(method && window.gtag){ gtag('event', 'contact_click', {method: method, page_path: location.pathname}); }
+});
+</script>
 </head>
 <body>
     <div class="top-bar">
@@ -310,6 +327,7 @@
                     quoteResult.style.color = "#4ade80";
                     quoteResult.textContent = "Request received! Thank you — Leeway Rides dispatch will contact you shortly to discuss your trip and pricing. Please note: this message confirms we received your request; your ride is confirmed only after we speak with you.";
                     quoteForm.reset();
+                    if(window.gtag){ gtag('event', 'quote_submission', {page_path: location.pathname}); }
                 } else {
                     quoteResult.style.color = "#f87171";
                     quoteResult.textContent = json.message || "Something went wrong. Please try again.";

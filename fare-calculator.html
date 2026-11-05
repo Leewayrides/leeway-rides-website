@@ -126,6 +126,7 @@ document.addEventListener('click', function(e){
         <select id="oversized"><option value="0">None</option><option value="1">1</option><option value="2">2</option></select>
       </div>
     </div>
+    <div id="stopFields"></div>
     <label class="check"><input id="roundTrip" type="checkbox"> Round trip (same rate back)</label>
     <button id="calcBtn" onclick="calculate()">Get my fare</button>
     <div class="error" id="errorBox"></div>
@@ -289,6 +290,40 @@ function attachAutocomplete(inputId, boxId, key){
 attachAutocomplete("pickup","pickupSuggest","pickup");
 attachAutocomplete("dropoff","dropoffSuggest","dropoff");
 
+// ===== STOP ADDRESS FIELDS (added Nov 5, 2026 — David's catch) =====
+// Choosing extra stops reveals one address field per stop, each with the same
+// type-ahead suggestions. The route (and so the fare) runs through the stops
+// in order, and the stop addresses ride along in the booking request so
+// dispatch sees the full trip.
+function renderStopFields(){
+  const n=+document.getElementById("stops").value;
+  const wrap=document.getElementById("stopFields");
+  wrap.innerHTML="";
+  for(let i=1;i<=n;i++){
+    const key="stop"+i;
+    picked[key]=null;
+    const lab=document.createElement("label");
+    lab.setAttribute("for",key); lab.textContent="Stop "+i+" address";
+    const aw=document.createElement("div"); aw.className="addr-wrap";
+    const inp=document.createElement("input");
+    inp.id=key; inp.type="text"; inp.placeholder="Start typing — then tap the stop address"; inp.setAttribute("autocomplete","off");
+    const sug=document.createElement("div"); sug.className="suggest"; sug.id=key+"Suggest";
+    aw.appendChild(inp); aw.appendChild(sug);
+    wrap.appendChild(lab); wrap.appendChild(aw);
+    attachAutocomplete(key, key+"Suggest", key);
+  }
+  document.getElementById("fareResult").style.display="none";
+}
+document.getElementById("stops").addEventListener("change", renderStopFields);
+
+async function routePath(pts){
+  const coords=pts.map(p=>p.lon+","+p.lat).join(";");
+  const url=`https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
+  const res=await fetch(url); const data=await res.json();
+  if(!data.routes||!data.routes.length) return null;
+  return { miles:data.routes[0].distance/1609.344, minutes:data.routes[0].duration/60 };
+}
+
 async function routeMM(a,b){
   const url=`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
   const res=await fetch(url); const data=await res.json();
@@ -310,15 +345,26 @@ async function calculate(){
   const pickup=document.getElementById("pickup").value.trim();
   const dropoff=document.getElementById("dropoff").value.trim();
   if(!pickup||!dropoff){ showError("errorBox","Please enter both a pickup and a destination address."); return; }
-  if(looksLikeAirport(pickup)||looksLikeAirport(dropoff)){
+  const stopCount=+document.getElementById("stops").value;
+  const stopTexts=[];
+  for(let i=1;i<=stopCount;i++){
+    const el=document.getElementById("stop"+i);
+    const v=el?el.value.trim():"";
+    if(!v){ showError("errorBox","You added a stop — please enter the stop address so dispatch knows where to take you."); return; }
+    stopTexts.push(v);
+  }
+  if(looksLikeAirport(pickup)||looksLikeAirport(dropoff)||stopTexts.some(t=>looksLikeAirport(t))){
     showError("errorBox","Airport trips ride on our published flat rates — see the airport page at leewayrides.com or call 980-470-7973 and we'll quote you right away."); return; }
   btn.disabled=true; btn.textContent="Calculating…";
   try{
     const pa=(picked.pickup&&picked.pickup.label===pickup)?Promise.resolve(picked.pickup.pt):geocode(pickup);
     const pb=(picked.dropoff&&picked.dropoff.label===dropoff)?Promise.resolve(picked.dropoff.pt):geocode(dropoff);
-    const [a,b]=await Promise.all([pa,pb]);
-    if(!a||!b){ showError("errorBox","We couldn't find one of those addresses. Check the spelling, add the city and state, and try again — or call 980-470-7973."); return; }
-    const r=await routeMM(a,b);
+    const sps=stopTexts.map((t,i)=>{ const k="stop"+(i+1);
+      return (picked[k]&&picked[k].label===t)?Promise.resolve(picked[k].pt):geocode(t); });
+    const resAll=await Promise.all([pa,pb,...sps]);
+    const a=resAll[0], b=resAll[1], stopPts=resAll.slice(2);
+    if(!a||!b||stopPts.some(p=>!p)){ showError("errorBox","We couldn't find one of those addresses. Check the spelling, add the city and state, and try again — or call 980-470-7973."); return; }
+    const r=await routePath([a,...stopPts,b]);
     if(!r){ showError("errorBox","We couldn't route that trip. Call 980-470-7973 and we'll quote you by phone."); return; }
     const legs=document.getElementById("roundTrip").checked?2:1;
     const driveFare=RATES.baseFare + RATES.perMile*r.miles + RATES.perMinute*r.minutes;
@@ -326,7 +372,7 @@ async function calculate(){
     const stopsFee=RATES.extraStopFee*+document.getElementById("stops").value;
     const bagsFee=RATES.extraBagFee*+document.getElementById("extraBags").value;
     const overFee=RATES.oversizedFee*+document.getElementById("oversized").value;
-    TRIP={ pickup, dropoff, pickupPt:a, miles:r.miles, minutes:r.minutes, legs, legFare,
+    TRIP={ pickup, dropoff, stopsList: stopTexts, pickupPt:a, miles:r.miles, minutes:r.minutes, legs, legFare,
       stopsFee, bagsFee, overFee, earlyFee:0,
       transportation: legFare*legs + stopsFee + bagsFee + overFee };
     let rows="";
@@ -345,7 +391,7 @@ async function calculate(){
     rows+=`<tr class="total-row"><td>Total</td><td>${money(TRIP.total)}</td></tr>`;
     document.getElementById("breakdown").innerHTML=rows;
     document.getElementById("totalOut").textContent=money(TRIP.total);
-    document.getElementById("routeOut").textContent=`${r.miles.toFixed(1)} miles · about ${Math.round(r.minutes)} minutes`+(legs===2?" · each way":"");
+    document.getElementById("routeOut").textContent=`${r.miles.toFixed(1)} miles · about ${Math.round(r.minutes)} minutes`+(legs===2?" · each way":"")+(stopTexts.length?` · includes ${stopTexts.length} stop${stopTexts.length>1?"s":""}`:"");
     document.getElementById("fareResult").style.display="block";
   }catch(e){ showError("errorBox","Something went wrong looking that up. Call 980-470-7973 and we'll quote you by phone."); }
   finally{ btn.disabled=false; btn.textContent="Get my fare"; }
@@ -415,6 +461,7 @@ async function sendBooking(){
   fd.append("Phone", TRIP.phone);
   fd.append("Pickup", TRIP.pickup);
   fd.append("Destination", TRIP.dropoff);
+  fd.append("Stop Addresses", (TRIP.stopsList&&TRIP.stopsList.length)?TRIP.stopsList.join(" | "):"None");
   fd.append("Trip Date", TRIP.date);
   fd.append("Pickup Time", TRIP.time);
   fd.append("Passengers", TRIP.passengers);
@@ -441,6 +488,7 @@ async function sendBooking(){
     }
     let fs="";
     fs+=`<tr><td>Ride</td><td>${TRIP.pickup} → ${TRIP.dropoff}</td></tr>`;
+    if(TRIP.stopsList) TRIP.stopsList.forEach((s,i)=>{ fs+=`<tr><td>Stop ${i+1}</td><td>${s}</td></tr>`; });
     fs+=`<tr><td>When</td><td>${TRIP.date} at ${TRIP.time}${TRIP.legs===2?" · round trip":""}</td></tr>`;
     fs+=`<tr><td>Rider</td><td>${TRIP.name} · ${TRIP.passengers} passenger(s)</td></tr>`;
     fs+=`<tr><td>Trip</td><td>${TRIP.miles.toFixed(1)} mi · about ${Math.round(TRIP.minutes)} min</td></tr>`;

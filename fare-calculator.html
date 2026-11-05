@@ -207,11 +207,23 @@ function haversineMi(a,b){ const R=3958.8, dLa=(b.lat-a.lat)*Math.PI/180, dLo=(b
   return 2*R*Math.asin(Math.sqrt(h)); }
 
 async function geocode(addr){
-  const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q="+encodeURIComponent(addr);
-  const res=await fetch(url,{headers:{"Accept":"application/json"}});
-  const data=await res.json();
-  if(!data||!data.length) return null;
-  return { lat:parseFloat(data[0].lat), lon:parseFloat(data[0].lon) };
+  // Primary: ArcGIS World Geocoder — strong on US residential street addresses
+  // (OpenStreetMap is missing many smaller Shelby streets, so it runs as fallback.)
+  try{
+    const u="https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=US&outFields=Match_addr&singleLine="+encodeURIComponent(addr);
+    const res=await fetch(u); const data=await res.json();
+    if(data && data.candidates && data.candidates.length && data.candidates[0].score>=85){
+      const c=data.candidates[0]; return { lat:c.location.y, lon:c.location.x };
+    }
+  }catch(e){ /* fall through to fallback */ }
+  // Fallback: OpenStreetMap Nominatim — good for landmarks and named places
+  try{
+    const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q="+encodeURIComponent(addr);
+    const res=await fetch(url,{headers:{"Accept":"application/json"}});
+    const data=await res.json();
+    if(data&&data.length) return { lat:parseFloat(data[0].lat), lon:parseFloat(data[0].lon) };
+  }catch(e){ /* fall through */ }
+  return null;
 }
 async function routeMM(a,b){
   const url=`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;

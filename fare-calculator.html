@@ -175,7 +175,7 @@ document.addEventListener('click', function(e){
     <div class="statusbox hold" id="payExplain"></div>
     <p class="note">Every booking starts as a <strong>request</strong> — requests are not confirmed
     reservations. Dispatch verifies a driver is available for your date and time, and contacts you
-    to confirm your ride. If we can't cover the ride, you pay nothing.</p>
+    to confirm your ride.</p>
     <div class="error" id="errorBox3"></div>
     <button id="sendBtn" onclick="sendBooking()">Send my booking request →</button>
     <button class="ghost" onclick="goStep(2)">← Back to details</button>
@@ -185,6 +185,7 @@ document.addEventListener('click', function(e){
   <div class="card step" id="step4">
     <h2>Request received 💜💛</h2>
     <div class="statusbox ok" id="confirmBox"></div>
+    <div class="statusbox hold" id="payPanel" style="display:none"></div>
     <table id="finalSummary" style="margin-top:12px"></table>
     <p class="note">Questions or changes? Call dispatch at <strong>980-470-7973</strong>.
     Which way you riding? SAY LEEWAY!</p>
@@ -214,6 +215,7 @@ const SHELBY = { lat: 35.29175, lon: -81.5402 }; // service core for review flag
 const AIRPORT_WORDS = ["airport","clt","gsp","avl","charlotte douglas",
   "greenville-spartanburg","greenville spartanburg","asheville regional"];
 const WEB3FORMS_KEY = "a5f6de0a-7809-4119-b0e9-62eb6bcd4c28"; // same public form key as the site Quick Quote form
+const SQUARE_PAY_LINK = "https://square.link/u/6IZt9aih"; // David's Square "Pay Your Fare" link (buyer-entered amount, verified live Nov 5, 2026) — the confirmation screen shows the pay step (upfront payments, David's Nov 5 decision).
 let TRIP = null; // holds the computed booking
 
 function money(n){ return "$" + n.toFixed(2); }
@@ -427,13 +429,16 @@ function reviewBooking(){
     box.innerHTML="<strong>Good news: nothing blocks this request.</strong> Dispatch will personally review: <br>• " + TRIP.flags.join("<br>• ");
   } else {
     box.className="statusbox ok";
-    box.innerHTML="<strong>This trip fits our basic-ride service.</strong> It goes to dispatch now as a request — a driver is verified for your exact date and time before you pay anything.";
+    box.innerHTML="<strong>This trip fits our basic-ride service.</strong> It goes to dispatch now as a request — " + (SQUARE_PAY_LINK ? "you'll pay your fare on the next screen, and dispatch verifies your driver right after; if we can't cover your ride, we refund you in full." : "a driver is verified for your exact date and time before you pay anything.");
   }
-  // Payment explanation: dispatch confirms availability first, then sends the secure Square payment step.
+  // Payment explanation: SQUARE_PAY_LINK set = pay upfront on the confirmation screen;
+  // otherwise dispatch confirms availability first, then sends the secure Square payment step.
   const daysOut=Math.round((new Date(date+"T12:00:00") - new Date())/86400000);
   TRIP.daysOut=daysOut;
   const pe=document.getElementById("payExplain");
-  if(daysOut>6){
+  if(SQUARE_PAY_LINK){
+    pe.innerHTML=`<strong>Pay your fare online to complete your booking.</strong> After you send this request, you'll see a secure Square pay button for <strong>${money(TRIP.total)}</strong> — pay right away so dispatch can lock in your ride. Dispatch then verifies your driver and contacts you to confirm. <strong>If we can't cover your ride, we refund you in full.</strong>`;
+  } else if(daysOut>6){
     pe.innerHTML=`Your ride is <strong>${daysOut} days out</strong>. We don't take payment today. Dispatch confirms your driver first, then sends you a secure Square payment link for <strong>${money(TRIP.total)}</strong> closer to your trip. <strong>Nothing is charged now.</strong>`;
   } else {
     pe.innerHTML=`<strong>No payment is taken on this page.</strong> Dispatch first verifies a driver for your date and time. If we can cover your ride, dispatch sends you a secure Square payment link for <strong>${money(TRIP.total)}</strong> to complete your booking — your card is only charged after your ride is confirmed by dispatch. If we can't accept the ride, you pay nothing.`;
@@ -471,6 +476,7 @@ async function sendBooking(){
   fd.append("Transportation Fare", money(TRIP.transportation));
   fd.append("Booking Fee", money(RATES.bookingFee));
   fd.append("Total", money(TRIP.total));
+  fd.append("Payment", SQUARE_PAY_LINK ? ("UPFRONT — customer was shown the Square pay link for " + money(TRIP.total) + " on the confirmation screen. Match the incoming Square payment by customer name + an amount at or just above the fare total (the customer may add a tip on Square's screen — the fare portion is " + money(TRIP.total) + ", ref " + ref + ") before confirming the ride. If we can't cover the ride, refund in full in the Square app.") : "Not collected on the site — dispatch sends the Square payment link after confirming (interim flow).");
   fd.append("Dispatch Flags", TRIP.flags.length ? TRIP.flags.join("; ") : "None");
   fd.append("How Did You Hear About Us?", TRIP.heard || "Not stated");
   fd.append("Notes", TRIP.notes || "None");
@@ -481,7 +487,15 @@ async function sendBooking(){
     if(res.status!==200 || !json.success) throw new Error("submit failed");
     if(window.gtag){ gtag('event', 'quote_submission', {page_path: location.pathname, source: 'fare_calculator'}); }
     const cb=document.getElementById("confirmBox");
-    if(TRIP.daysOut>6){
+    if(SQUARE_PAY_LINK){
+      cb.innerHTML=`Booking request <span class="ref">${ref}</span> is with dispatch. <strong>One step left: pay your fare below</strong> so we can lock in your ride. Dispatch will contact you to confirm your driver — if we can't cover your ride, we refund you in full.`;
+      const pp=document.getElementById("payPanel");
+      pp.style.display="block";
+      pp.innerHTML=`<div style="font-size:19px;font-weight:800;color:#3b1d5e">Pay your fare: ${money(TRIP.total)}</div>
+      <p style="margin:8px 0">Tap the button, enter <strong>${money(TRIP.total)}</strong>, and pay with the <strong>same name</strong> as this booking so dispatch can match your payment. One heads-up: Square shows a tip option with 15% already picked — your fare is exactly <strong>${money(TRIP.total)}</strong>. Set the tip to <strong>Other → 0</strong> to pay just your fare, or leave it as a tip for your driver.</p>
+      <a href="${SQUARE_PAY_LINK}" target="_blank" rel="noopener" style="display:inline-block;background:#3b1d5e;color:#fff;font-weight:700;padding:13px 20px;border-radius:10px;text-decoration:none">Pay ${money(TRIP.total)} with Square →</a>
+      <p class="note" style="margin-top:8px">Secure checkout on Square's own site. Paid but we can't cover your ride? We refund you in full.</p>`;
+    } else if(TRIP.daysOut>6){
       cb.innerHTML=`Booking request <span class="ref">${ref}</span> is with dispatch. No payment taken today — dispatch will contact you to confirm your ride, and your secure Square payment link arrives closer to your trip.`;
     } else {
       cb.innerHTML=`Booking request <span class="ref">${ref}</span> is with dispatch. Nothing has been charged. Once dispatch confirms your driver, you'll get a secure Square payment link for <strong>${money(TRIP.total)}</strong> to complete your booking. If we can't accept the ride, you pay nothing.`;
@@ -495,6 +509,7 @@ async function sendBooking(){
     fs+=`<tr><td>Transportation fare</td><td>${money(TRIP.transportation)}</td></tr>`;
     fs+=`<tr><td>Booking fee</td><td>${money(RATES.bookingFee)}</td></tr>`;
     fs+=`<tr class="total-row"><td>Total</td><td>${money(TRIP.total)}</td></tr>`;
+    if(SQUARE_PAY_LINK) fs+=`<tr><td>Payment</td><td>Pay online now — Square button above</td></tr>`;
     fs+=`<tr><td>Status</td><td>REQUESTED — dispatch confirming</td></tr>`;
     document.getElementById("finalSummary").innerHTML=fs;
     goStep(4);

@@ -186,9 +186,21 @@ document.addEventListener('click', function(e){
     <h2>Request received 💜💛</h2>
     <div class="statusbox ok" id="confirmBox"></div>
     <div class="statusbox hold" id="payPanel" style="display:none"></div>
+    <div class="statusbox" id="statusPanel" style="display:none"></div>
     <table id="finalSummary" style="margin-top:12px"></table>
     <p class="note">Questions or changes? Call dispatch at <strong>980-470-7973</strong>.
     Which way you riding? SAY LEEWAY!</p>
+  </div>
+
+  <div class="card" id="statusChecker">
+    <h2>Already booked? Check your ride status</h2>
+    <p class="note" style="margin:4px 0 10px">Paid your fare on Square? Enter the name on the booking and your fare total and we'll check whether your payment has landed.</p>
+    <label>Booking name</label>
+    <input id="chkName" type="text" placeholder="Name on the booking" autocomplete="name">
+    <label>Fare total you paid (e.g. 61.34)</label>
+    <input id="chkTotal" type="text" inputmode="decimal" placeholder="Fare total">
+    <button type="button" onclick="checkRideStatus(document.getElementById('chkName').value, document.getElementById('chkTotal').value, document.getElementById('chkResult'))" style="margin-top:10px">Check my ride status</button>
+    <div class="statusbox" id="chkResult" style="display:none;margin-top:10px"></div>
   </div>
 
   <p class="note" style="text-align:center">Basic rides only. Airport trips use our published flat rates;
@@ -216,9 +228,48 @@ const AIRPORT_WORDS = ["airport","clt","gsp","avl","charlotte douglas",
   "greenville-spartanburg","greenville spartanburg","asheville regional"];
 const WEB3FORMS_KEY = "a5f6de0a-7809-4119-b0e9-62eb6bcd4c28"; // same public form key as the site Quick Quote form
 const SQUARE_PAY_LINK = "https://square.link/u/6IZt9aih"; // David's Square "Pay Your Fare" link (buyer-entered amount, verified live Nov 5, 2026) — the confirmation screen shows the pay step (upfront payments, David's Nov 5 decision).
+const STATUS_API = "https://leeway-holds.ltsconnectnetwork.workers.dev"; // payment-status service (Nov 7, 2026): the "Check my ride status" button asks it whether the rider's Square payment landed; it answers only once the Worker's Square key is set, and the page degrades gracefully until then.
 let TRIP = null; // holds the computed booking
 
 function money(n){ return "$" + n.toFixed(2); }
+
+// Payment-status check (Nov 7, 2026): asks the status service whether Square
+// shows a payment matching this rider's name + fare total. On a match the box
+// flips to RIDE CONFIRMED; the service answers "not active" until dispatch
+// switches it on, and the page stays honest in that state.
+async function checkRideStatus(name, totalStr, box, trip){
+  const clean = String(totalStr || "").replace(/[^0-9.]/g, "");
+  const cents = Math.round(parseFloat(clean) * 100);
+  box.style.display = "block";
+  if(!name || !name.trim() || !Number.isFinite(cents) || cents < 100){
+    box.className = "statusbox hold";
+    box.innerHTML = "Please enter the booking name and the fare total from your booking summary.";
+    return;
+  }
+  box.className = "statusbox";
+  box.innerHTML = "Checking with Square…";
+  try{
+    const res = await fetch(STATUS_API + "/payment-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), amount_cents: cents }) });
+    const d = await res.json().catch(() => ({}));
+    if(res.status === 503 || d.active === false){
+      box.className = "statusbox";
+      box.innerHTML = "Our instant status check is being switched on — dispatch confirms every paid ride personally. Questions? Call <strong>980-470-7973</strong>.";
+      return;
+    }
+    if(d.matched){
+      box.className = "statusbox ok";
+      box.innerHTML = "<strong style=\"font-size:19px\">✅ RIDE CONFIRMED</strong><br>We found your payment of <strong>" + money(d.paid_cents / 100) + "</strong> — your ride is locked in." + (trip ? "<br>" + trip.pickup + " → " + trip.dropoff + " · " + trip.date + " at " + trip.time : "") + "<br><span class=\"note\">Dispatch has your trip. If anything about your ride changes, we contact you — and if we ever can't cover a ride, we refund in full.</span>";
+      const stRow = document.querySelector("#finalSummary tr:last-child td:last-child");
+      if(trip && stRow) stRow.textContent = "CONFIRMED ✅ — payment received";
+      return;
+    }
+    box.className = "statusbox hold";
+    box.innerHTML = "We don't see that payment yet. Payments can take a minute to appear — if you just paid, wait a moment and check again. Paid under a different name? No problem — dispatch also matches payments by hand. Still nothing after a few minutes? Call dispatch at <strong>980-470-7973</strong>.";
+  }catch(e){
+    box.className = "statusbox hold";
+    box.innerHTML = "We couldn't check just now. Dispatch confirms every paid ride — call <strong>980-470-7973</strong> and we'll confirm you on the spot.";
+  }
+}
 function looksLikeAirport(a){ a=a.toLowerCase(); return AIRPORT_WORDS.some(w=>a.includes(w)); }
 function haversineMi(a,b){ const R=3958.8, dLa=(b.lat-a.lat)*Math.PI/180, dLo=(b.lon-a.lon)*Math.PI/180;
   const h=Math.sin(dLa/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLo/2)**2;
@@ -494,7 +545,8 @@ async function sendBooking(){
       pp.innerHTML=`<div style="font-size:19px;font-weight:800;color:#3b1d5e">Pay your fare: ${money(TRIP.total)}</div>
       <p style="margin:8px 0">Tap the button, enter <strong>${money(TRIP.total)}</strong>, and pay with the <strong>same name</strong> as this booking so dispatch can match your payment. One heads-up: Square shows a tip option with 15% already picked — your fare is exactly <strong>${money(TRIP.total)}</strong>. Set the tip to <strong>Other → 0</strong> to pay just your fare, or leave it as a tip for your driver.</p>
       <a href="${SQUARE_PAY_LINK}" target="_blank" rel="noopener" style="display:inline-block;background:#3b1d5e;color:#fff;font-weight:700;padding:13px 20px;border-radius:10px;text-decoration:none">Pay ${money(TRIP.total)} with Square →</a>
-      <p class="note" style="margin-top:8px">Secure checkout on Square's own site. Paid but we can't cover your ride? We refund you in full.</p>`;
+      <p class="note" style="margin-top:8px">Secure checkout on Square's own site. Paid but we can't cover your ride? We refund you in full.</p>
+      <button type="button" onclick="checkRideStatus(TRIP.name, String(TRIP.total), document.getElementById('statusPanel'), TRIP)" style="margin-top:6px">I've paid — check my ride status</button>`;
     } else if(TRIP.daysOut>6){
       cb.innerHTML=`Booking request <span class="ref">${ref}</span> is with dispatch. No payment taken today — dispatch will contact you to confirm your ride, and your secure Square payment link arrives closer to your trip.`;
     } else {

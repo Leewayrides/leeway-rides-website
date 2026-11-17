@@ -324,7 +324,7 @@ document.addEventListener('click', function(e){
     {k:['what services','what do you offer','what kind of rides','services do you','qué servicios','que servicios','ofrecen','qué ofrecen','servicios'], a:{en:"Leeway Rides provides pre-scheduled transportation across Shelby and Western North Carolina: rides to work, medical appointments like dialysis and physical therapy, airport trips, school transportation, personal trips and errands, and long-distance rides. Every ride is scheduled in advance, with your driver confirmed before your trip.", es:"Leeway Rides ofrece transporte programado en Shelby y el oeste de Carolina del Norte: viajes al trabajo, citas médicas como diálisis y fisioterapia, viajes al aeropuerto, transporte escolar, viajes personales y diligencias, y viajes de larga distancia. Todo viaje se programa con anticipación y su conductor se confirma antes del viaje."}},
     {k:['how far in advance','book ahead','in advance','same day','last minute','how soon','con cuánta anticipación','con cuanta anticipacion','anticipación','mismo día','mismo dia'], a:{en:"All of our rides are scheduled in advance — the earlier you request, the better we can line up your driver. Same-day requests depend on driver availability, and dispatch will tell you honestly whether we can cover it when they call to confirm.", es:"Todos nuestros viajes se programan con anticipación: cuanto antes solicite, mejor podremos asignar su conductor. Las solicitudes para el mismo día dependen de la disponibilidad, y despacho le dirá con honestidad si podemos cubrirlo cuando le llame para confirmar."}},
     {k:['quote','confirmed','reservation','is my ride booked','difference','cotización','cotizacion','confirmad','reserva es','diferencia'], a:{en:"Good question — they're different. A quote request is just you telling us the trip you need. Dispatch then reviews it, contacts you with the price, and confirms a driver. Your reservation is only confirmed once dispatch has spoken with you and confirmed it. Sending a request never locks you in, and it never guarantees a vehicle until we confirm.", es:"Buena pregunta: son cosas distintas. Una solicitud de cotización es solo usted contándonos el viaje que necesita. Despacho la revisa, le contacta con el precio y confirma un conductor. Su reserva solo queda confirmada cuando despacho ha hablado con usted. Enviar una solicitud no le compromete ni garantiza un vehículo hasta que confirmemos."}},
-    {k:['price','cost','how much','charge','rate','fare','precio','cuánto','cuanto','cuesta','cuestan','cobran','tarifa'], a:{en:"For a basic local ride I can estimate your fare right here — just tell me where you're starting and where you're headed, and I'll price the trip. Airport trips ride on our published flat rates, and recurring weekly rides are quoted by dispatch as one simple arrangement — for those, dispatch gives you the exact price when they call to confirm, before you're committed to anything. There's no charge to ask.", es:"Para un viaje local básico puedo estimar su tarifa aquí mismo — solo dígame dónde comienza y a dónde va, y calculo el viaje. Los viajes al aeropuerto usan nuestras tarifas fijas publicadas, y los viajes semanales recurrentes los cotiza despacho como un solo arreglo — para esos, despacho le da el precio exacto cuando le llame para confirmar, antes de que usted se comprometa. Preguntar no tiene costo."}},
+    {k:['price','cost','how much','charge','rate','fare','precio','cuánto','cuanto','cuesta','cuestan','cobran','tarifa'], a:{en:"For a basic local ride — and for airport trips too — I can estimate your fare right here: just tell me where you're starting and where you're headed, and I'll price the trip with our standard fare, no surge, ever. Recurring weekly rides are quoted by dispatch as one simple arrangement — for those, dispatch gives you the exact price when they call to confirm, before you're committed to anything. There's no charge to ask.", es:"Para un viaje local básico — y también para viajes al aeropuerto — puedo estimar su tarifa aquí mismo: solo dígame dónde comienza y a dónde va, y calculo el viaje con nuestra tarifa estándar, sin recargos, nunca. Los viajes semanales recurrentes los cotiza despacho como un solo arreglo — para esos, despacho le da el precio exacto cuando le llame para confirmar, antes de que usted se comprometa. Preguntar no tiene costo."}},
     {k:['airport','flight','charlotte douglas','clt','aeropuerto','vuelo'], a:{en:"We provide pre-scheduled airport transportation, including Charlotte Douglas and other regional airports, with early-morning pickups available by reservation. Book your return pickup at the same time and one reservation covers both directions — dispatch confirms your driver before your trip.", es:"Ofrecemos transporte al aeropuerto con programación anticipada, incluido Charlotte Douglas y otros aeropuertos regionales, con recogidas temprano en la mañana mediante reserva. Reserve también su recogida de regreso y una sola reserva cubre ambos trayectos; despacho confirma su conductor antes del viaje."}},
     {k:['medical','dialysis','doctor','appointment','therapy','hospital','médic','medic','diálisis','dialisis','cita','fisioterapia'], a:{en:"We provide ambulatory non-emergency medical transportation — dialysis, physical therapy, doctor's appointments, and similar trips — and recurring schedules are our specialty. I only need your pickup and the facility you're visiting; please don't share medical details with me, we never need them to arrange your ride.", es:"Ofrecemos transporte médico ambulatorio no urgente: diálisis, fisioterapia, citas con el médico y viajes similares, y los horarios recurrentes son nuestra especialidad. Solo necesito su punto de recogida y el centro al que va; por favor no comparta detalles médicos conmigo, nunca los necesitamos para organizar su viaje."}},
     {k:['wheelchair','accessible','wheel chair','silla de ruedas'], a:{en:"Right now our service is ambulatory transportation, and we don't currently offer wheelchair-accessible vehicles. I don't want to promise something we can't deliver — please call dispatch at "+DISPATCH+" and they'll talk through your options.", es:"Por ahora nuestro servicio es transporte ambulatorio y no ofrecemos vehículos accesibles para sillas de ruedas. No quiero prometer algo que no podemos cumplir: llame a despacho al "+DISPATCH+" y ellos hablarán de sus opciones."}},
@@ -337,13 +337,15 @@ document.addEventListener('click', function(e){
   ];
 
   // ===== FARE ESTIMATES (added Nov 7, 2026 — David's request) =====
-  // Hey Lee prices BASIC rides with the same engine as the website fare
-  // calculator: ArcGIS geocoding (Nominatim fallback), OSRM routing, and the
-  // published Option B rates (Nov 5, 2026). Estimates only — Hey Lee never
-  // confirms a ride; dispatch confirms the final total when they contact the
-  // customer. Airport trips (published flat-rate menu), recurring schedules
-  // (dispatch-quoted weekly arrangements), and pre-5 AM pickups (published
-  // early fee applied by dispatch) are NOT estimated here.
+  // Hey Lee prices BASIC and AIRPORT rides with the same engine as the
+  // website fare calculator: ArcGIS geocoding (Nominatim fallback), OSRM
+  // routing, and the published Option B rates (Nov 5, 2026). Airport trips
+  // price on the same standard formula — no separate flat-rate menu
+  // (David's decision, Nov 17, 2026). Estimates only — Hey Lee never
+  // confirms a ride; dispatch confirms the final total when they contact
+  // the customer. Recurring schedules (dispatch-quoted weekly arrangements)
+  // are NOT estimated here; pre-5 AM pickups get the $20 early-pickup
+  // heads-up, with the fee applied by dispatch in the confirmed total.
   var RATES={baseFare:5.00, perMile:1.00, perMinute:0.12, minimumFare:10.00, bookingFee:3.00, minimumTotal:13.00, extraStopFee:15.00, earlyPickupFee:20.00};
   var AIRPORT_WORDS=['airport','clt','gsp','avl','charlotte douglas','greenville-spartanburg','greenville spartanburg','asheville regional','aeropuerto'];
   var fareQuote=null; // {total, miles, minutes} once computed
@@ -376,10 +378,6 @@ document.addEventListener('click', function(e){
   function computeFare(){
     fareQuote=null;
     if(!answers.pickup || !answers.destination) return Promise.resolve();
-    if(looksAirport(answers.pickup) || looksAirport(answers.destination) || looksAirport(answers.stops||'')){
-      fareQuote={skip:'airport'}; return Promise.resolve();
-    }
-    if(answers.service==='Airport'){ fareQuote={skip:'airport'}; return Promise.resolve(); }
     var rec=String(answers.recurring||'').toLowerCase();
     if(rec && !/one|single|once|una/.test(rec)){ fareQuote={skip:'recurring'}; return Promise.resolve(); }
     var stopList=[];
@@ -405,7 +403,6 @@ document.addEventListener('click', function(e){
   function fareFieldText(){
     if(!fareQuote) return '';
     if(fareQuote.total) return money2(fareQuote.total)+' (estimate — '+fareQuote.miles.toFixed(1)+' mi, ~'+Math.round(fareQuote.minutes)+' min'+(fareQuote.legs===2?', round trip':'')+(fareQuote.stops?', incl. '+fareQuote.stops+' stop(s) at $15 each':'')+' — dispatch confirms the final total)';
-    if(fareQuote.skip==='airport') return 'Not estimated by Hey Lee — airport trips use the published flat-rate menu; dispatch quotes the exact flat rate';
     if(fareQuote.skip==='recurring') return 'Not estimated by Hey Lee — recurring rides are quoted by dispatch as a weekly arrangement';
     return 'Not estimated by Hey Lee — dispatch will quote this trip when they call';
   }
@@ -422,9 +419,6 @@ document.addEventListener('click', function(e){
         : "One heads-up: pickups before 5:00 AM carry the published $20 early-pickup fee per leg — dispatch will include it in your confirmed total.");
       return;
     }
-    if(fareQuote.skip==='airport'){ leeSay(lang==='es'
-      ? 'Ese es un viaje al aeropuerto — esos usan nuestras tarifas fijas publicadas, así que despacho le dará la tarifa exacta y fija cuando le llame para confirmar.'
-      : "That's an airport trip — those ride on our published flat rates, so dispatch will give you the exact locked flat rate when they call to confirm."); return; }
     if(fareQuote.skip==='recurring'){ leeSay(lang==='es'
       ? 'Como es un viaje recurrente, despacho lo cotizará como un arreglo semanal sencillo cuando le llame — así obtiene un solo precio simple para toda la semana.'
       : "Since this is a recurring ride, dispatch will quote it as one simple weekly arrangement when they call — so you get one simple price for the whole week."); return; }

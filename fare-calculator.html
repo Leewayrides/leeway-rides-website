@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fare Calculator & Book a Ride | Leeway Rides — Shelby & Western NC</title>
-<meta name="description" content="Get an instant fare for a pre-scheduled basic ride with Leeway Rides — no surge pricing, ever. Shelby, Kings Mountain, Gastonia, Forest City, Charlotte and Western NC. Dispatch confirms every booking: 980-470-7973.">
+<meta name="description" content="Get an instant fare for a pre-scheduled basic or airport ride with Leeway Rides — no surge pricing, ever. Shelby, Kings Mountain, Gastonia, Forest City, Charlotte and Western NC. Dispatch confirms every booking: 980-470-7973.">
 <link rel="canonical" href="https://leewayrides.com/fare-calculator.html">
 <meta property="og:title" content="Leeway Rides Fare Calculator — No Surge Pricing, Ever">
 <meta property="og:description" content="See your fare up front, send your booking request, and dispatch confirms your driver before you pay. Pre-scheduled rides across Shelby & Western NC.">
@@ -89,7 +89,7 @@ document.addEventListener('click', function(e){
 
   <header>
     <h1>Leeway <span>RIDES</span></h1>
-    <p>It's a Family Affair — get your fare and book a basic ride.</p>
+    <p>It's a Family Affair — get your fare and book a basic or airport ride.</p>
   </header>
 
   <div class="steps" id="stepBar">
@@ -203,8 +203,8 @@ document.addEventListener('click', function(e){
     <div class="statusbox" id="chkResult" style="display:none;margin-top:10px"></div>
   </div>
 
-  <p class="note" style="text-align:center">Basic rides only. Airport trips use our published flat rates;
-  weekly work rates, broker assignments, and specialty transportation are arranged with dispatch at 980-470-7973.
+  <p class="note" style="text-align:center">Basic and airport rides are priced right here with our standard fare — no surge, ever.
+  Weekly work rates, broker assignments, and specialty transportation are arranged with dispatch at 980-470-7973.
   Leeway provides ambulatory transportation — riders must be able to transfer into a vehicle seat.</p>
 
   <footer>
@@ -406,8 +406,10 @@ async function calculate(){
     if(!v){ showError("errorBox","You added a stop — please enter the stop address so dispatch knows where to take you."); return; }
     stopTexts.push(v);
   }
-  if(looksLikeAirport(pickup)||looksLikeAirport(dropoff)||stopTexts.some(t=>looksLikeAirport(t))){
-    showError("errorBox","Airport trips ride on our published flat rates — see the airport page at leewayrides.com or call 980-470-7973 and we'll quote you right away."); return; }
+  // Airport trips price right here with the standard basic-ride formula
+  // (David's executive decision, Nov 17, 2026) — no separate airport quote.
+  // Detection is kept only so dispatch sees it is an airport trip.
+  const isAirport = looksLikeAirport(pickup)||looksLikeAirport(dropoff)||stopTexts.some(t=>looksLikeAirport(t));
   btn.disabled=true; btn.textContent="Calculating…";
   try{
     const pa=(picked.pickup&&picked.pickup.label===pickup)?Promise.resolve(picked.pickup.pt):geocode(pickup);
@@ -425,7 +427,7 @@ async function calculate(){
     const stopsFee=RATES.extraStopFee*+document.getElementById("stops").value;
     const bagsFee=RATES.extraBagFee*+document.getElementById("extraBags").value;
     const overFee=RATES.oversizedFee*+document.getElementById("oversized").value;
-    TRIP={ pickup, dropoff, stopsList: stopTexts, pickupPt:a, miles:r.miles, minutes:r.minutes, legs, legFare,
+    TRIP={ pickup, dropoff, airport: isAirport, stopsList: stopTexts, pickupPt:a, miles:r.miles, minutes:r.minutes, legs, legFare,
       stopsFee, bagsFee, overFee, earlyFee:0,
       transportation: legFare*legs + stopsFee + bagsFee + overFee };
     let rows="";
@@ -444,7 +446,7 @@ async function calculate(){
     rows+=`<tr class="total-row"><td>Total</td><td>${money(TRIP.total)}</td></tr>`;
     document.getElementById("breakdown").innerHTML=rows;
     document.getElementById("totalOut").textContent=money(TRIP.total);
-    document.getElementById("routeOut").textContent=`${r.miles.toFixed(1)} miles · about ${Math.round(r.minutes)} minutes`+(legs===2?" · each way":"")+(stopTexts.length?` · includes ${stopTexts.length} stop${stopTexts.length>1?"s":""}`:"");
+    document.getElementById("routeOut").textContent=`${r.miles.toFixed(1)} miles · about ${Math.round(r.minutes)} minutes`+(legs===2?" · each way":"")+(stopTexts.length?` · includes ${stopTexts.length} stop${stopTexts.length>1?"s":""}`:"")+(isAirport?" · Airport trip — your fare is priced right here, no separate airport quote needed":"");
     document.getElementById("fareResult").style.display="block";
   }catch(e){ showError("errorBox","Something went wrong looking that up. Call 980-470-7973 and we'll quote you by phone."); }
   finally{ btn.disabled=false; btn.textContent="Get my fare"; }
@@ -470,6 +472,7 @@ function reviewBooking(){
   // Review flags: long empty pickup (pickup far from service core) or very long trip
   const emptyMi=haversineMi(SHELBY, TRIP.pickupPt);
   TRIP.flags=[];
+  if(TRIP.airport) TRIP.flags.push("airport trip — priced right here on the calculator; dispatch will confirm your flight details and driver availability");
   if(emptyMi>60) TRIP.flags.push("pickup is well outside our Shelby/Western NC core — dispatch will review the empty drive to your pickup");
   if(TRIP.miles>100) TRIP.flags.push("long-distance trip (over 100 miles one-way) — dispatch confirms these personally");
   if(hour<5) TRIP.flags.push("early-morning pickup (before 5:00 AM) — the $20 early pickup fee is included");
@@ -512,6 +515,7 @@ async function sendBooking(){
   fd.append("subject", "New Booking Request (Fare Calculator) — " + ref);
   fd.append("from_name", "Leeway Rides Fare Calculator");
   fd.append("Source", "Fare Calculator — leewayrides.com/fare-calculator.html");
+  fd.append("Trip Type", TRIP.airport ? "Airport — priced on fare calculator (standard basic-ride formula)" : "Basic ride");
   fd.append("Booking Reference", ref);
   fd.append("Rider Name", TRIP.name);
   fd.append("Phone", TRIP.phone);

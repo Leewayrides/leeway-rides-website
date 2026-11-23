@@ -61,6 +61,9 @@
   .ref { font-weight:800; color:var(--purple); }
   footer { text-align:center; font-size:13px; color:#555; margin-top:22px; line-height:1.6; }
   footer a { color:var(--purple); font-weight:700; }
+
+  .stickybar { display:none; }
+  @media (max-width:768px){ .stickybar{ display:flex; position:fixed; bottom:0; left:0; right:0; z-index:60; background:#241433; border-top:2px solid var(--gold); } .stickybar a{ flex:1; text-align:center; padding:14px 6px; color:#fff; text-decoration:none; font-weight:700; font-size:15px; } .stickybar a.gold{ background:var(--gold); color:#241433; flex:1.6; } body{ padding-bottom:54px; } }
 </style>
 <!-- Google Analytics 4 (Leeway Rides) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-8Z82NGV6BC"></script>
@@ -90,6 +93,7 @@ document.addEventListener('click', function(e){
   <header>
     <h1>Leeway <span>RIDES</span></h1>
     <p>It's a Family Affair — get your fare and book a basic or airport ride.</p>
+    <p style="font-size:13px;color:#6b5b82;">✔ Fare locked at booking &nbsp;·&nbsp; ✔ No surge pricing, ever &nbsp;·&nbsp; ✔ Dispatch confirms every trip before you ride</p>
   </header>
 
   <div class="steps" id="stepBar">
@@ -575,5 +579,7 @@ async function sendBooking(){
   }
 }
 </script>
+
+<div class="stickybar"><a class="gold" href="#step1">🚗 Book Online — Start My Fare</a><a href="tel:+19804707973">📞 Call Dispatch</a></div>
 </body>
 </html>

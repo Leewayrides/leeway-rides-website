@@ -96,7 +96,7 @@ document.addEventListener('click', function(e){
         <nav><ul>
             <li><a href="../index.html">Home</a></li><li><a href="airport-transportation.html">Airport</a></li><li><a href="medical-transportation.html">Medical</a></li><li><a href="work-transportation.html">Work Rides</a></li><li><a href="shelby-transportation.html">Service Areas</a></li><li><a href="../index.html#quick-quote-form">Contact &amp; Book</a></li>
         </ul></nav>
-        <a href="#quick-quote-form" class="btn-gold">Get a Quick Quote</a>
+        <a href="#quick-quote-form" class="btn-gold">Book Online</a>
     </header>
     <main role="main">
     <section class="hero" style="min-height: auto; padding: 50px 5%;">
@@ -104,9 +104,19 @@ document.addEventListener('click', function(e){
             <div class="hero-subtitle">Leeway Rides — Pre-Scheduled Transportation</div>
             <h1 style="font-size: 2.4rem;">Cherryville to Charlotte Douglas Airport (CLT), Booked Before You Fly</h1>
             <p>Your flight is booked — your ride should be too. Leeway Rides provides pre-scheduled airport transportation from Cherryville to Charlotte Douglas International Airport (CLT), roughly about 45 minutes away, with your driver and pickup time confirmed before your trip.</p>
-            <div class="hero-ctas"><a href="#quick-quote-form" class="btn-gold">Get a Quick Quote</a><a href="tel:+19804707973" class="phone-cta"><i class="fa-solid fa-phone"></i> 980-470-7973</a></div>
+            <div class="hero-ctas"><a href="#quick-quote-form" class="btn-gold" style="font-size:1rem;padding:14px 28px;">Get an Instant Fare &amp; Book Online</a><a href="../fare-calculator.html" class="btn-gold" style="background:transparent;border:2px solid var(--accent-gold);color:var(--accent-gold);">Fare Calculator</a></div><p style="margin-top:14px;color:#ddd;font-size:0.98rem;">Prefer to talk? Dispatch <a href="tel:+19804707973" style="color:var(--accent-gold);font-weight:700;text-decoration:none;">980-470-7973</a></p>
         </div>
         <div style="text-align: center;"><img src="../7689.png" alt="Leeway Rides" width="300" height="300" style="max-width: 70%; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6));"></div>
+    </section>
+    <section class="book-online-band" style="background:linear-gradient(135deg,#2a0845 0%,#1b022b 100%);border-top:2px solid var(--accent-gold);border-bottom:2px solid var(--accent-gold);padding:34px 5%;text-align:center;">
+        <h2 style="color:var(--accent-gold);font-size:1.6rem;margin-bottom:10px;text-transform:uppercase;">Book Online — Skip the Phone Tag</h2>
+        <p style="color:#eee;max-width:760px;margin:0 auto 16px;">Get an instant fare, lock your price, and send your booking request right here — most riders book in about a minute. Every Leeway ride is pre-scheduled, and our dispatcher confirms your trip before you ride.</p>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;">
+            <a href="#quick-quote-form" class="btn-gold" style="font-size:1rem;padding:14px 28px;">Get an Instant Fare &amp; Book Online</a>
+            <a href="../fare-calculator.html" class="btn-gold" style="background:transparent;border:2px solid var(--accent-gold);color:var(--accent-gold);font-size:1rem;padding:14px 28px;">Fare Calculator</a>
+        </div>
+        <p style="color:#ffd98a;font-weight:600;margin-bottom:8px;">✔ Fare locked at booking &nbsp;·&nbsp; ✔ No surge pricing — ever &nbsp;·&nbsp; ✔ Dispatcher confirms every trip</p>
+        <p style="color:#ccc;font-size:0.95rem;">Prefer to talk? Dispatch <a href="tel:+19804707973" style="color:var(--accent-gold);font-weight:700;text-decoration:none;">980-470-7973</a></p>
     </section>
     <section class="content-section">
 <h2>Cherryville to CLT Airport Transfers</h2>
@@ -138,6 +148,9 @@ document.addEventListener('click', function(e){
         <h3>How do I book?</h3>
         <p>Call or text 980-470-7973, talk to Lee when you call the main line, or use the Quick Quote form below. Every ride is confirmed by dispatch — the form starts the request, dispatch confirms it.</p>
 
+        <div class="book-online-trust" style="background:rgba(243,173,33,0.10);border:1px solid rgba(243,173,33,0.45);border-radius:12px;padding:14px 18px;margin:50px auto 0;text-align:center;color:#fff;max-width:1000px;">
+            <strong style="color:var(--light-gold);">Booking online?</strong> ✔ Your fare is locked at booking &nbsp;·&nbsp; ✔ No surge pricing — ever &nbsp;·&nbsp; ✔ Our dispatcher confirms every trip before you ride.
+        </div>
         <div class="quote-box">
             <h3>Quick Quote Request</h3>
             <p style="text-align: center; color: #ccc; font-size: 0.95rem; margin-bottom: 10px;">Tell us about your trip and our team will get back to you promptly with a price.</p>
@@ -163,7 +176,7 @@ document.addEventListener('click', function(e){
         <div style="margin-bottom: 10px;">Call/Text <a href="tel:+19804707973" style="color: var(--accent-gold); text-decoration: none; font-weight: 700;">980-470-7973</a> &nbsp;|&nbsp; www.leewayrides.com &nbsp;|&nbsp; Powered by LTS Connect Network Inc.</div>
         <div class="copyright">&copy; 2026 Leeway Rides / LTS Connect Network. All Rights Reserved. Available by advance reservation.</div>
     </footer>
-    <div class="mobile-action-bar"><a href="tel:+19804707973"><i class="fa-solid fa-phone"></i> Call</a><a href="sms:+19804707973"><i class="fa-solid fa-comment"></i> Text</a><a href="#quick-quote-form" class="gold"><i class="fa-solid fa-file-signature"></i> Get a Quote</a></div>
+    <div class="mobile-action-bar"><a href="#quick-quote-form" class="gold" style="flex:1.7;"><i class="fa-solid fa-calendar-check"></i> Book Online</a><a href="tel:+19804707973"><i class="fa-solid fa-phone"></i> Call</a><a href="sms:+19804707973"><i class="fa-solid fa-comment"></i> Text</a></div>
 
     <script>
         const quoteForm = document.getElementById('quick-quote-form');

@@ -133,7 +133,7 @@ document.addEventListener('click', function(e){
 
   <div class="card">
     <div class="disclosure" id="disclosure"></div>
-    <p style="text-align:center;font-size:.9rem;margin:2px 0 10px;">Prefer a form instead? <a href="https://leewayrides.com/">Use our Quick Quote</a></p>
+    <p style="text-align:center;font-size:.9rem;margin:2px 0 10px;">Want a price right now? <a href="fare-calculator.html">Get an Instant Fare</a></p>
 
     <div id="chat" aria-live="polite"></div>
 
@@ -248,8 +248,8 @@ document.addEventListener('click', function(e){
     dateExactQ:"No problem — what is the exact calendar date?",
     summarySay:"Here's what I have. Please check it over — you can fix anything right on the screen — then tap Send my request. Remember, your ride is confirmed only after dispatch contacts you.",
     summaryCbSay:"Here's the callback request for dispatch. Check it over, then tap Send — dispatch will call you to verify and help with your booking.",
-    sentBooking:"✅ <strong>Request received!</strong> Thank you — Leeway Rides dispatch will contact you shortly to confirm your ride. Your ride is <strong>not confirmed</strong> until we speak with you. Need us sooner? Call <a href='tel:+19804707973' style='color:#7be495;'>980-470-7973</a>.",
-    sentBookingSay:"Your request is in! Dispatch will contact you to confirm. Thank you for riding with Leeway!",
+    sentBooking:"✅ <strong>Request received!</strong> Leeway Rides dispatch will contact you shortly to confirm your ride. Your ride is <strong>not confirmed</strong> until we speak with you. Need us sooner? Call <a href='tel:+19804707973' style='color:#7be495;'>980-470-7973</a>. <strong>Which way you riding?</strong>",
+    sentBookingSay:"Your request is in! Dispatch will contact you to confirm. Which way you riding?",
     sentCb:"✅ <strong>Callback request received!</strong> Dispatch will call you to verify your booking and help. For anything urgent, call <a href='tel:+19804707973' style='color:#7be495;'>980-470-7973</a>.",
     sentCbSay:"Your callback request is in. Dispatch will call you to verify your booking. Thank you!",
     sentFail:"⚠️ Something went wrong sending that. Please call or text dispatch at <a href='tel:+19804707973' style='color:#ffd968;'>980-470-7973</a> and we will take care of you right away.",
@@ -310,8 +310,8 @@ document.addEventListener('click', function(e){
     dateExactQ:"Sin problema — ¿cuál es la fecha exacta?",
     summarySay:"Esto es lo que tengo. Revíselo por favor — puede corregir lo que quiera en la pantalla — y luego toque Enviar mi solicitud. Recuerde: su viaje se confirma solo después de que despacho le contacte.",
     summaryCbSay:"Esta es la solicitud de llamada para despacho. Revísela y toque Enviar — despacho le llamará para verificar y ayudarle con su reserva.",
-    sentBooking:"✅ <strong>¡Solicitud recibida!</strong> Gracias — despacho de Leeway Rides le contactará pronto para confirmar su viaje. Su viaje <strong>no está confirmado</strong> hasta que hablemos con usted. ¿Nos necesita antes? Llame al <a href='tel:+19804707973' style='color:#7be495;'>980-470-7973</a>.",
-    sentBookingSay:"¡Su solicitud llegó! Despacho le contactará para confirmar. ¡Gracias por viajar con Leeway!",
+    sentBooking:"✅ <strong>¡Solicitud recibida!</strong> Despacho de Leeway Rides le contactará pronto para confirmar su viaje. Su viaje <strong>no está confirmado</strong> hasta que hablemos con usted. ¿Nos necesita antes? Llame al <a href='tel:+19804707973' style='color:#7be495;'>980-470-7973</a>. <strong>Which way you riding?</strong>",
+    sentBookingSay:"¡Su solicitud llegó! Despacho le contactará para confirmar. Which way you riding?",
     sentCb:"✅ <strong>¡Solicitud de llamada recibida!</strong> Despacho le llamará para verificar su reserva y ayudarle. Para algo urgente, llame al <a href='tel:+19804707973' style='color:#7be495;'>980-470-7973</a>.",
     sentCbSay:"Su solicitud de llamada llegó. Despacho le llamará para verificar su reserva. ¡Gracias!",
     sentFail:"⚠️ Algo salió mal al enviar. Llame o escriba a despacho al <a href='tel:+19804707973' style='color:#ffd968;'>980-470-7973</a> y le atendemos enseguida.",
@@ -351,6 +351,14 @@ document.addEventListener('click', function(e){
   var fareQuote=null; // {total, miles, minutes} once computed
   function money2(n){ return '$'+n.toFixed(2); }
   function looksAirport(a){ var t=(a||'').toLowerCase(); for(var i=0;i<AIRPORT_WORDS.length;i++){ if(t.indexOf(AIRPORT_WORDS[i])>-1) return true; } return false; }
+  // December Special (David's promo, live Nov 19, 2026; wired into Hey Lee
+  // Nov 22, 2026, mirroring fare-calculator.html): 25% off airport, train
+  // station & bus station trips BOOKED online December 1-22, 2026. No
+  // minimum, no cap. The booking date (visitor's local date) controls —
+  // not the ride date.
+  var STATION_WORDS=['amtrak','train station','rail station','railroad station','greyhound','bus station','bus terminal','bus depot','megabus','flixbus','transportation center','estación de tren','estacion de tren','estación de autobuses','estacion de autobuses'];
+  function looksLikeStationTrip(a){ var t=(a||'').toLowerCase(); if(looksAirport(t)) return true; for(var i=0;i<STATION_WORDS.length;i++){ if(t.indexOf(STATION_WORDS[i])>-1) return true; } return false; }
+  function decPromoActive(d){ var t=d||new Date(); return t>=new Date(2026,11,1,0,0,0,0) && t<=new Date(2026,11,22,23,59,59,999); }
   function geocodeHL(addr){
     var u='https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=US&outFields=Match_addr&singleLine='+encodeURIComponent(addr);
     return fetch(u).then(function(r){ return r.json(); }).then(function(data){
@@ -397,12 +405,21 @@ document.addEventListener('click', function(e){
         var transportation=legFare*legs + RATES.extraStopFee*stopList.length;
         var total=Math.max(transportation + RATES.bookingFee, RATES.minimumTotal);
         fareQuote={total:total, miles:r.miles, minutes:r.minutes, legs:legs, stops:stopList.length};
+        // December Special: 25% off when the booking date is Dec 1-22, 2026
+        // and the trip touches an airport, train station, or bus station.
+        var stationTrip=looksLikeStationTrip(answers.pickup) || looksLikeStationTrip(answers.destination) || stopList.some(function(s){ return looksLikeStationTrip(s); });
+        if(decPromoActive() && stationTrip){
+          fareQuote.totalBeforePromo=total;
+          fareQuote.total=Math.round(total*0.75*100)/100;
+          fareQuote.promoSavings=Math.round((fareQuote.totalBeforePromo-fareQuote.total)*100)/100;
+          fareQuote.promo=true;
+        }
       });
     }).catch(function(){ fareQuote={skip:'route'}; });
   }
   function fareFieldText(){
     if(!fareQuote) return '';
-    if(fareQuote.total) return money2(fareQuote.total)+' (estimate — '+fareQuote.miles.toFixed(1)+' mi, ~'+Math.round(fareQuote.minutes)+' min'+(fareQuote.legs===2?', round trip':'')+(fareQuote.stops?', incl. '+fareQuote.stops+' stop(s) at $15 each':'')+' — dispatch confirms the final total)';
+    if(fareQuote.total) return money2(fareQuote.total)+' (estimate — '+fareQuote.miles.toFixed(1)+' mi, ~'+Math.round(fareQuote.minutes)+' min'+(fareQuote.legs===2?', round trip':'')+(fareQuote.stops?', incl. '+fareQuote.stops+' stop(s) at $15 each':'')+(fareQuote.promo?' — December Special: 25% off applied (regular fare '+money2(fareQuote.totalBeforePromo)+', saves '+money2(fareQuote.promoSavings)+')':'')+' — dispatch confirms the final total)';
     if(fareQuote.skip==='recurring') return 'Not estimated by Hey Lee — recurring rides are quoted by dispatch as a weekly arrangement';
     return 'Not estimated by Hey Lee — dispatch will quote this trip when they call';
   }
@@ -414,6 +431,9 @@ document.addEventListener('click', function(e){
         ? ('Su tarifa estimada es '+money2(fareQuote.total)+' — eso cubre un viaje de '+fareQuote.miles.toFixed(1)+' millas, unos '+Math.round(fareQuote.minutes)+' minutos'+(fareQuote.legs===2?', ida y vuelta':'')+'. Sin recargos sorpresa: el precio que ve es el precio. Despacho confirma el total final cuando le contacte.')
         : ('Your estimated fare is '+money2(fareQuote.total)+' — that covers a '+fareQuote.miles.toFixed(1)+'-mile trip, about '+Math.round(fareQuote.minutes)+' minutes'+(fareQuote.legs===2?', round trip':'')+'. No surge pricing, ever — the fare you see is the fare. Dispatch confirms the final total when they contact you.');
       leeSay(baseTxt);
+      if(fareQuote.promo) leeSay(lang==='es'
+        ? 'Y una buena noticia: ese precio ya incluye nuestro Especial de Diciembre — 25% de descuento en viajes al aeropuerto, la estación de tren o la estación de autobuses reservados en línea del 1 al 22 de diciembre. Se ahorra '+money2(fareQuote.promoSavings)+' sobre la tarifa regular de '+money2(fareQuote.totalBeforePromo)+'.'
+        : 'And good news: that price already includes our December Special — 25% off airport, train station, and bus station trips booked online December 1 through 22. You save '+money2(fareQuote.promoSavings)+' off the regular '+money2(fareQuote.totalBeforePromo)+' fare.');
       if(early) leeSay(lang==='es'
         ? 'Un aviso: las recogidas antes de las 5:00 AM llevan la tarifa publicada de $20 por tramo temprano — despacho la incluirá en su total confirmado.'
         : "One heads-up: pickups before 5:00 AM carry the published $20 early-pickup fee per leg — dispatch will include it in your confirmed total.");

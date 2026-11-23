@@ -275,6 +275,29 @@ async function checkRideStatus(name, totalStr, box, trip){
   }
 }
 function looksLikeAirport(a){ a=a.toLowerCase(); return AIRPORT_WORDS.some(w=>a.includes(w)); }
+// December Special (David's promo, live Nov 19, 2026; wired into the calculator Nov 22, 2026):
+// 25% off airport, train station & bus station trips BOOKED online December 1-22, 2026.
+// No minimum, no cap. The booking date (visitor's local date) controls — not the ride date.
+const STATION_WORDS = ["amtrak","train station","rail station","railroad station",
+  "greyhound","bus station","bus terminal","bus depot","megabus","flixbus","transportation center"];
+function looksLikeStationTrip(a){ a=String(a||"").toLowerCase(); return looksLikeAirport(a) || STATION_WORDS.some(w=>a.includes(w)); }
+function decPromoActive(d){
+  const t = d || new Date();
+  return t >= new Date(2026,11,1,0,0,0,0) && t <= new Date(2026,11,22,23,59,59,999);
+}
+function applyDecPromo(trip){
+  // (Re)computes the total from transportation + booking fee, then applies the
+  // December Special when the trip qualifies. Safe to call again after the
+  // early-pickup fee adjusts transportation in reviewBooking().
+  trip.totalBeforePromo = Math.max(trip.transportation + RATES.bookingFee, RATES.minimumTotal);
+  if(trip.promo){
+    trip.total = Math.round(trip.totalBeforePromo * 0.75 * 100) / 100;
+    trip.promoSavings = Math.round((trip.totalBeforePromo - trip.total) * 100) / 100;
+  } else {
+    trip.total = trip.totalBeforePromo;
+    trip.promoSavings = 0;
+  }
+}
 function haversineMi(a,b){ const R=3958.8, dLa=(b.lat-a.lat)*Math.PI/180, dLo=(b.lon-a.lon)*Math.PI/180;
   const h=Math.sin(dLa/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLo/2)**2;
   return 2*R*Math.asin(Math.sqrt(h)); }
@@ -414,6 +437,8 @@ async function calculate(){
   // (David's executive decision, Nov 17, 2026) — no separate airport quote.
   // Detection is kept only so dispatch sees it is an airport trip.
   const isAirport = looksLikeAirport(pickup)||looksLikeAirport(dropoff)||stopTexts.some(t=>looksLikeAirport(t));
+  // December Special eligibility: airport / train station / bus station trip booked Dec 1-22, 2026.
+  const isStation = looksLikeStationTrip(pickup)||looksLikeStationTrip(dropoff)||stopTexts.some(t=>looksLikeStationTrip(t));
   btn.disabled=true; btn.textContent="Calculating…";
   try{
     const pa=(picked.pickup&&picked.pickup.label===pickup)?Promise.resolve(picked.pickup.pt):geocode(pickup);
@@ -433,6 +458,7 @@ async function calculate(){
     const overFee=RATES.oversizedFee*+document.getElementById("oversized").value;
     TRIP={ pickup, dropoff, airport: isAirport, stopsList: stopTexts, pickupPt:a, miles:r.miles, minutes:r.minutes, legs, legFare,
       stopsFee, bagsFee, overFee, earlyFee:0,
+      promo: decPromoActive() && isStation,
       transportation: legFare*legs + stopsFee + bagsFee + overFee };
     let rows="";
     rows+=`<tr><td>Base fare</td><td>${money(RATES.baseFare)} / leg</td></tr>`;
@@ -444,13 +470,17 @@ async function calculate(){
     if(stopsFee) rows+=`<tr><td>Extra stops</td><td>${money(stopsFee)}</td></tr>`;
     if(bagsFee) rows+=`<tr><td>Extra bags</td><td>${money(bagsFee)}</td></tr>`;
     if(overFee) rows+=`<tr><td>Oversized items</td><td>${money(overFee)}</td></tr>`;
-    TRIP.total = Math.max(TRIP.transportation + RATES.bookingFee, RATES.minimumTotal);
+    applyDecPromo(TRIP);
     rows+=`<tr><td>Transportation fare</td><td>${money(TRIP.transportation)}</td></tr>`;
     rows+=`<tr><td>Booking fee</td><td>${money(RATES.bookingFee)}</td></tr>`;
+    if(TRIP.promo){
+      rows+=`<tr><td>Fare before December Special</td><td>${money(TRIP.totalBeforePromo)}</td></tr>`;
+      rows+=`<tr><td>🎄 December Special: 25% off applied</td><td>−${money(TRIP.promoSavings)}</td></tr>`;
+    }
     rows+=`<tr class="total-row"><td>Total</td><td>${money(TRIP.total)}</td></tr>`;
     document.getElementById("breakdown").innerHTML=rows;
     document.getElementById("totalOut").textContent=money(TRIP.total);
-    document.getElementById("routeOut").textContent=`${r.miles.toFixed(1)} miles · about ${Math.round(r.minutes)} minutes`+(legs===2?" · each way":"")+(stopTexts.length?` · includes ${stopTexts.length} stop${stopTexts.length>1?"s":""}`:"")+(isAirport?" · Airport trip — your fare is priced right here, no separate airport quote needed":"");
+    document.getElementById("routeOut").textContent=`${r.miles.toFixed(1)} miles · about ${Math.round(r.minutes)} minutes`+(legs===2?" · each way":"")+(stopTexts.length?` · includes ${stopTexts.length} stop${stopTexts.length>1?"s":""}`:"")+(isAirport?" · Airport trip — your fare is priced right here, no separate airport quote needed":"")+(TRIP.promo?" · 🎄 December Special: 25% off applied":"");
     document.getElementById("fareResult").style.display="block";
   }catch(e){ showError("errorBox","Something went wrong looking that up. Call 980-470-7973 and we'll quote you by phone."); }
   finally{ btn.disabled=false; btn.textContent="Get my fare"; }
@@ -471,12 +501,13 @@ function reviewBooking(){
   const hour=parseInt(time.split(":")[0],10);
   if(hour<5 && TRIP.earlyFee===0){
     TRIP.earlyFee=RATES.earlyPickupFee; TRIP.transportation+=RATES.earlyPickupFee;
-    TRIP.total=Math.max(TRIP.transportation + RATES.bookingFee, RATES.minimumTotal);
+    applyDecPromo(TRIP); // recompute total (December Special re-applies on the adjusted fare)
   }
   // Review flags: long empty pickup (pickup far from service core) or very long trip
   const emptyMi=haversineMi(SHELBY, TRIP.pickupPt);
   TRIP.flags=[];
   if(TRIP.airport) TRIP.flags.push("airport trip — priced right here on the calculator; dispatch will confirm your flight details and driver availability");
+  if(TRIP.promo) TRIP.flags.push("December Special applied — 25% off: regular total " + money(TRIP.totalBeforePromo) + ", rider pays promo total " + money(TRIP.total));
   if(emptyMi>60) TRIP.flags.push("pickup is well outside our Shelby/Western NC core — dispatch will review the empty drive to your pickup");
   if(TRIP.miles>100) TRIP.flags.push("long-distance trip (over 100 miles one-way) — dispatch confirms these personally");
   if(hour<5) TRIP.flags.push("early-morning pickup (before 5:00 AM) — the $20 early pickup fee is included");
@@ -504,6 +535,10 @@ function reviewBooking(){
   let ps="";
   ps+=`<tr><td>Transportation fare</td><td>${money(TRIP.transportation)}</td></tr>`;
   ps+=`<tr><td>Booking fee</td><td>${money(RATES.bookingFee)}</td></tr>`;
+  if(TRIP.promo){
+    ps+=`<tr><td>Fare before December Special</td><td>${money(TRIP.totalBeforePromo)}</td></tr>`;
+    ps+=`<tr><td>🎄 December Special: 25% off applied</td><td>−${money(TRIP.promoSavings)}</td></tr>`;
+  }
   ps+=`<tr class="total-row"><td>Total</td><td>${money(TRIP.total)}</td></tr>`;
   document.getElementById("paySummary").innerHTML=ps;
   goStep(3);
@@ -535,6 +570,7 @@ async function sendBooking(){
   fd.append("Transportation Fare", money(TRIP.transportation));
   fd.append("Booking Fee", money(RATES.bookingFee));
   fd.append("Total", money(TRIP.total));
+  fd.append("December Special Promo", TRIP.promo ? ("APPLIED — 25% off airport/train/bus trip booked online Dec 1-22. Regular total " + money(TRIP.totalBeforePromo) + " -> promo total " + money(TRIP.total) + " (rider saved " + money(TRIP.promoSavings) + ")") : "Not applied");
   fd.append("Payment", SQUARE_PAY_LINK ? ("UPFRONT — customer was shown the Square pay link for " + money(TRIP.total) + " on the confirmation screen. Match the incoming Square payment by customer name + an amount at or just above the fare total (the customer may add a tip on Square's screen — the fare portion is " + money(TRIP.total) + ", ref " + ref + ") before confirming the ride. If we can't cover the ride, refund in full in the Square app.") : "Not collected on the site — dispatch sends the Square payment link after confirming (interim flow).");
   fd.append("Dispatch Flags", TRIP.flags.length ? TRIP.flags.join("; ") : "None");
   fd.append("How Did You Hear About Us?", TRIP.heard || "Not stated");
@@ -568,6 +604,10 @@ async function sendBooking(){
     fs+=`<tr><td>Trip</td><td>${TRIP.miles.toFixed(1)} mi · about ${Math.round(TRIP.minutes)} min</td></tr>`;
     fs+=`<tr><td>Transportation fare</td><td>${money(TRIP.transportation)}</td></tr>`;
     fs+=`<tr><td>Booking fee</td><td>${money(RATES.bookingFee)}</td></tr>`;
+    if(TRIP.promo){
+      fs+=`<tr><td>Fare before December Special</td><td>${money(TRIP.totalBeforePromo)}</td></tr>`;
+      fs+=`<tr><td>🎄 December Special: 25% off applied</td><td>−${money(TRIP.promoSavings)}</td></tr>`;
+    }
     fs+=`<tr class="total-row"><td>Total</td><td>${money(TRIP.total)}</td></tr>`;
     if(SQUARE_PAY_LINK) fs+=`<tr><td>Payment</td><td>Pay online now — Square button above</td></tr>`;
     fs+=`<tr><td>Status</td><td>REQUESTED — dispatch confirming</td></tr>`;

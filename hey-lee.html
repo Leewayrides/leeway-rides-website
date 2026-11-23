@@ -359,14 +359,74 @@ document.addEventListener('click', function(e){
   var STATION_WORDS=['amtrak','train station','rail station','railroad station','greyhound','bus station','bus terminal','bus depot','megabus','flixbus','transportation center','estación de tren','estacion de tren','estación de autobuses','estacion de autobuses'];
   function looksLikeStationTrip(a){ var t=(a||'').toLowerCase(); if(looksAirport(t)) return true; for(var i=0;i<STATION_WORDS.length;i++){ if(t.indexOf(STATION_WORDS[i])>-1) return true; } return false; }
   function decPromoActive(d){ var t=d||new Date(); return t>=new Date(2026,11,1,0,0,0,0) && t<=new Date(2026,11,22,23,59,59,999); }
-  function geocodeHL(addr){
-    var u='https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=US&outFields=Match_addr&singleLine='+encodeURIComponent(addr);
+  // ===== ADDRESS RESOLUTION — LOCAL-FIRST (Nov 22, 2026 — David's fix) =====
+  // Mirrors fare-calculator.html. The old geocoder had no local bias: a
+  // Shelby street that ArcGIS couldn't match fell back to Nominatim and
+  // matched the same street name in another state, pricing a cross-country
+  // trip. Now: every lookup is biased to the Shelby / Western NC service
+  // area, a local match wins over a far one, and if only a far match exists
+  // (and the rider didn't name a city/state) geocodeHL returns
+  // {farAway:true} — Hey Lee then ASKS for the city instead of guessing.
+  var SERVICE_CENTER_HL={lat:35.29175, lon:-81.5402}; // Shelby, NC
+  var SERVICE_RADIUS_MI_HL=120; // Western NC + Charlotte metro
+  var NOM_VIEWBOX_HL='-84.6,36.7,-79.4,33.7'; // left,top,right,bottom around Western NC
+  function havMiHL(a,b){ var R=3958.8, dLa=(b.lat-a.lat)*Math.PI/180, dLo=(b.lon-a.lon)*Math.PI/180;
+    var h=Math.sin(dLa/2)*Math.sin(dLa/2) + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2);
+    return 2*R*Math.asin(Math.sqrt(h)); }
+  function withinServiceHL(pt){ return havMiHL(SERVICE_CENTER_HL, pt) <= SERVICE_RADIUS_MI_HL; }
+  function textExplainsFarHL(addr){ addr=String(addr||'');
+    return /,/.test(addr) || /\b\d{5}(-\d{4})?\b/.test(addr) ||
+      /\b(nc|sc|ga|tn|va|wv|ky|oh|fl|al|north carolina|south carolina|georgia|tennessee|virginia|west virginia|kentucky|ohio|florida|alabama)\b/i.test(addr); }
+  function arcgisOnceHL(addr){
+    var u='https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=5&countryCode=US&outFields=Match_addr&location='+SERVICE_CENTER_HL.lon+','+SERVICE_CENTER_HL.lat+'&singleLine='+encodeURIComponent(addr);
     return fetch(u).then(function(r){ return r.json(); }).then(function(data){
-      if(data && data.candidates && data.candidates.length && data.candidates[0].score>=85){ var c=data.candidates[0]; return {lat:c.location.y, lon:c.location.x}; }
-      return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(addr), {headers:{'Accept':'application/json'}})
-        .then(function(r){ return r.json(); })
-        .then(function(d){ return (d && d.length) ? {lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon)} : null; })
-        .catch(function(){ return null; });
+      if(data && data.candidates && data.candidates.length){
+        var cands=data.candidates.filter(function(c){ return c.score>=80; });
+        if(cands.length){
+          var best={lat:cands[0].location.y, lon:cands[0].location.x}, local=null;
+          for(var i=0;i<cands.length;i++){ var p={lat:cands[i].location.y, lon:cands[i].location.x}; if(withinServiceHL(p)){ local=p; break; } }
+          return {best:best, local:local};
+        }
+      }
+      return null;
+    }).catch(function(){ return null; });
+  }
+  function nominatimHL(addr, bounded){
+    var url='https://nominatim.openstreetmap.org/search?format=json&limit=3&countrycodes=us&q='+encodeURIComponent(addr);
+    if(bounded) url+='&viewbox='+NOM_VIEWBOX_HL+'&bounded=1';
+    return fetch(url, {headers:{'Accept':'application/json'}}).then(function(r){ return r.json(); }).then(function(d){
+      if(d && d.length){
+        var pts=d.map(function(x){ return {lat:parseFloat(x.lat), lon:parseFloat(x.lon)}; });
+        pts.sort(function(x,y){ return havMiHL(SERVICE_CENTER_HL,x)-havMiHL(SERVICE_CENTER_HL,y); });
+        return pts[0]; // nearest to the service area wins
+      }
+      return null;
+    }).catch(function(){ return null; });
+  }
+  function geocodeOnceHL(addr){
+    return arcgisOnceHL(addr).then(function(r){
+      if(r) return r;
+      return nominatimHL(addr, true).then(function(nb){
+        if(nb) return {best:nb, local: withinServiceHL(nb) ? nb : null};
+        return nominatimHL(addr, false).then(function(nu){
+          return nu ? {best:nu, local: withinServiceHL(nu) ? nu : null} : null;
+        });
+      });
+    });
+  }
+  // Returns {lat,lon} | {farAway:true} | null
+  function geocodeHL(addr){
+    return geocodeOnceHL(addr).then(function(r){
+      if(textExplainsFarHL(addr)) return r ? r.best : null; // rider named the place — price it, however far
+      if(r && r.local) return r.local;
+      if(!/shelby/i.test(addr)){
+        // Prefer a local street match (e.g. Earl Street, Shelby) over any far match
+        return geocodeOnceHL(addr+', Shelby, NC').then(function(retry){
+          if(retry && retry.local) return retry.local;
+          return (r && r.best) ? {farAway:true} : null;
+        });
+      }
+      return (r && r.best) ? {farAway:true} : null;
     }).catch(function(){ return null; });
   }
   function routeHL(pts){
@@ -388,13 +448,12 @@ document.addEventListener('click', function(e){
     if(!answers.pickup || !answers.destination) return Promise.resolve();
     var rec=String(answers.recurring||'').toLowerCase();
     if(rec && !/one|single|once|una/.test(rec)){ fareQuote={skip:'recurring'}; return Promise.resolve(); }
-    var stopList=[];
-    var st=String(answers.stops||'').trim();
-    if(st && !/^(none|no|ninguna|ninguno)$/i.test(st)){
-      stopList=st.split(/\s*(?:;|\band then\b|\bthen\b|\by luego\b|\bluego\b)\s*/i).map(function(x){ return x.trim(); }).filter(Boolean).slice(0,3);
-    }
-    var jobs=[geocodeHL(answers.pickup), geocodeHL(answers.destination)].concat(stopList.map(geocodeHL));
+    var stopList=stopListHL();
+    var useCached = validatedPts && validatedFor && validatedFor.pickup===answers.pickup && validatedFor.destination===answers.destination && validatedFor.stops===(answers.stops||'');
+    var jobs = useCached ? validatedPts.map(function(p){ return Promise.resolve(p); })
+                         : [geocodeHL(answers.pickup), geocodeHL(answers.destination)].concat(stopList.map(geocodeHL));
     return Promise.all(jobs).then(function(pts){
+      if(pts.some(function(p){ return p && p.farAway; })){ fareQuote={skip:'city'}; return; }
       if(pts.some(function(p){ return !p; })){ fareQuote={skip:'address'}; return; }
       var seq=[pts[0]].concat(pts.slice(2), [pts[1]]);
       return routeHL(seq).then(function(r){
@@ -445,6 +504,9 @@ document.addEventListener('click', function(e){
     if(fareQuote.skip==='address'){ leeSay(lang==='es'
       ? 'No pude ubicar una de esas direcciones con exactitud, así que no voy a adivinar un precio — despacho le dará su tarifa exacta cuando le llame.'
       : "I couldn't pin down one of those addresses exactly, so I won't guess a price — dispatch will give you your exact fare when they call."); return; }
+    if(fareQuote.skip==='city'){ leeSay(lang==='es'
+      ? 'Encontré una coincidencia para una de esas direcciones muy lejos de aquí, y no quiero cotizar el viaje equivocado. ¿En qué ciudad está? Dígale la ciudad y el estado a despacho cuando le llame — o llame ahora al '+DISPATCH+' — y le darán la tarifa exacta.'
+      : 'I found a match for one of those addresses far away from here, and I don\'t want to price the wrong trip. What city is that in? Give dispatch the city and state when they call — or call '+DISPATCH+' now — and they\'ll give you the exact fare.'); return; }
     leeSay(lang==='es'
       ? 'No pude calcular esa ruta automáticamente — despacho le dará su tarifa exacta cuando le llame.'
       : "I couldn't calculate that route automatically — dispatch will give you your exact fare when they call.");
@@ -468,6 +530,7 @@ document.addEventListener('click', function(e){
   }
 
   var mode='menu', answers={}, stepIdx=-1, cbAnswers={}, cbIdx=-1, started=false, pendingText=null, prevMode='menu', reprocessing=false, awaitingDate=null, dateCandidate=null;
+  var addrValidated=false, validatedPts=null, validatedFor=null, awaitingCity=false, cityFix=null;
 
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition, recog=null, listening=false;
   if(SR){
@@ -528,12 +591,49 @@ document.addEventListener('click', function(e){
   $('langEn').onclick=function(){ if(lang!=='en') applyLang('en', true); };
   $('langEs').onclick=function(){ if(lang!=='es') applyLang('es', true); };
 
+  function stopListHL(){
+    var st=String(answers.stops||'').trim();
+    if(!st || /^(none|no|ninguna|ninguno)$/i.test(st)) return [];
+    return st.split(/\s*(?:;|\band then\b|\bthen\b|\by luego\b|\bluego\b)\s*/i).map(function(x){ return x.trim(); }).filter(Boolean).slice(0,3);
+  }
+  // Before the summary, verify the addresses resolve locally. If one only
+  // matches far away, ask the rider for the city (awaitingCity) and re-check
+  // — Hey Lee never prices a far-away guess.
+  function validateAddressesThenSummary(){
+    if(addrValidated){ showSummary(); return; }
+    var rec=String(answers.recurring||'').toLowerCase();
+    if(rec && !/one|single|once|una/.test(rec)){ addrValidated=true; showSummary(); return; } // recurring: dispatch-quoted, no estimate to protect
+    leeSay(lang==='es' ? 'Un momento — verifico esas direcciones…' : 'One moment — let me check those addresses…');
+    var stops=stopListHL();
+    var jobs=[geocodeHL(answers.pickup), geocodeHL(answers.destination)].concat(stops.map(geocodeHL));
+    Promise.all(jobs).then(function(pts){
+      var farIdx=-1;
+      for(var i=0;i<pts.length;i++){ if(pts[i] && pts[i].farAway){ farIdx=i; break; } }
+      if(farIdx===-1){
+        addrValidated=true; validatedPts=pts;
+        validatedFor={pickup:answers.pickup, destination:answers.destination, stops:answers.stops||''};
+        showSummary(); return;
+      }
+      if(farIdx===0) cityFix={kind:'pickup'};
+      else if(farIdx===1) cityFix={kind:'destination'};
+      else cityFix={kind:'stop', index:farIdx-2};
+      awaitingCity=true;
+      var which = cityFix.kind==='pickup' ? (lang==='es'?'su lugar de recogida':'your pickup')
+        : cityFix.kind==='destination' ? (lang==='es'?'su destino':'your destination')
+        : (lang==='es'?'esa parada':'that stop');
+      leeSay(lang==='es'
+        ? 'Quiero asegurarme de cotizar el viaje correcto: no encontré la dirección de '+which+' cerca de aquí, y no quiero adivinar. ¿En qué ciudad está?'
+        : 'I want to make sure I price the right trip: I couldn\'t find the address for '+which+' nearby, and I won\'t guess. What city is that in?');
+      setChips(['Shelby','Kings Mountain','Gastonia','Forest City','Charlotte']);
+    }).catch(function(){ addrValidated=true; showSummary(); });
+  }
   function askStep(){
-    if(stepIdx>=T[lang].steps.length){ showSummary(); return; }
+    if(stepIdx>=T[lang].steps.length){ validateAddressesThenSummary(); return; }
     var s=T[lang].steps[stepIdx]; leeSay(s.q); setChips(s.chips);
   }
   function startBooking(prefillService){
     mode='booking'; answers={}; stepIdx=0;
+    addrValidated=false; validatedPts=null; validatedFor=null; awaitingCity=false; cityFix=null;
     summaryEl.style.display='none'; $('sentMsg').style.display='none'; summaryEl.dataset.kind='booking';
     if(prefillService){ answers.service=prefillService; stepIdx=1; leeSay(T[lang].bookPrefill); setChips([]); }
     else askStep();
@@ -622,6 +722,16 @@ document.addEventListener('click', function(e){
     }
 
     if(mode==='booking'){
+      if(awaitingCity){
+        var city=text.trim();
+        if(city){
+          if(cityFix.kind==='pickup') answers.pickup=answers.pickup+', '+city;
+          else if(cityFix.kind==='destination') answers.destination=answers.destination+', '+city;
+          else { var sl=stopListHL(); if(sl[cityFix.index]) sl[cityFix.index]=sl[cityFix.index]+', '+city; answers.stops=sl.join('; '); }
+        }
+        awaitingCity=false; cityFix=null;
+        validateAddressesThenSummary(); return;
+      }
       if(awaitingDate==='confirm'){
         if(/^(y|yes|s|sí|si|correct)/i.test(text)){ answers.dateConfirmed=dateCandidate; awaitingDate=null; stepIdx++; setTimeout(askStep,350); }
         else { awaitingDate='exact'; leeSay(T[lang].dateExactQ); setChips([]); }

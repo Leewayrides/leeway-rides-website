@@ -21,7 +21,6 @@
 
 ## How to book
 - Book online (fastest): get an instant fare and send a booking request at https://leewayrides.com/fare-calculator.html
-- Or send the Quick Quote form at https://leewayrides.com/#quick-quote-form
 - Talk to Hey Lee, the Leeway Rides voice assistant: https://leewayrides.com/hey-lee.html
 - Prefer to talk? Call or text dispatch at 980-470-7973
 - A booking request is not a confirmed reservation; dispatch contacts every customer to confirm the ride and price.

@@ -106,14 +106,14 @@ document.addEventListener('click', function(e){
   <!-- STEP 1: FARE -->
   <div class="card step show" id="step1">
     <h2>Where are we going?</h2>
-    <label for="pickup">Pickup address</label>
+    <label for="pickup">Pickup address (street, city, state)</label>
     <div class="addr-wrap">
-      <input id="pickup" type="text" placeholder="Start typing — then tap your address" autocomplete="off">
+      <input id="pickup" type="text" placeholder="Street, city, state — start typing, then tap your address" autocomplete="off">
       <div class="suggest" id="pickupSuggest"></div>
     </div>
-    <label for="dropoff">Destination address</label>
+    <label for="dropoff">Destination address (street, city, state)</label>
     <div class="addr-wrap">
-      <input id="dropoff" type="text" placeholder="Start typing — then tap your address" autocomplete="off">
+      <input id="dropoff" type="text" placeholder="Street, city, state — start typing, then tap your address" autocomplete="off">
       <div class="suggest" id="dropoffSuggest"></div>
     </div>
     <div class="row">
@@ -302,23 +302,78 @@ function haversineMi(a,b){ const R=3958.8, dLa=(b.lat-a.lat)*Math.PI/180, dLo=(b
   const h=Math.sin(dLa/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLo/2)**2;
   return 2*R*Math.asin(Math.sqrt(h)); }
 
-async function geocode(addr){
-  // Primary: ArcGIS World Geocoder — strong on US residential street addresses
-  // (OpenStreetMap is missing many smaller Shelby streets, so it runs as fallback.)
+// ===== ADDRESS RESOLUTION — LOCAL-FIRST (Nov 22, 2026 — David's fix) =====
+// David reproduced a real failure: "714 Earl Street" (Shelby) got no match
+// from the unbiased geocoder, fell back to Nominatim, and matched an Earl
+// Street in another state — pricing a cross-country trip for a ~2-mile ride.
+// Rules now:
+//  1. Every geocode is biased to the Shelby / Western NC service area (the
+//     autocomplete suggestions already were; the plain geocode path was not).
+//  2. A local match (within SERVICE_RADIUS_MI of Shelby) wins over a far one,
+//     including a street-level local match over an out-of-state exact match.
+//  3. If only a far match exists and the typed text includes no city/state/ZIP
+//     explaining it, we do NOT price it — geocode() returns {farAway:true}
+//     and calculate() asks the rider to add the city and state.
+//  4. A full address WITH city/state still prices normally, however far it
+//     is — legitimate long-distance trips are unaffected.
+const SERVICE_CENTER={ lat:35.29175, lon:-81.5402 }; // Shelby, NC — same point the suggestions use
+const SERVICE_RADIUS_MI=120; // Western NC + Charlotte metro service region
+const NOM_VIEWBOX="-84.6,36.7,-79.4,33.7"; // Nominatim viewbox: left,top,right,bottom around Western NC
+function withinService(pt){ return haversineMi(SERVICE_CENTER, pt) <= SERVICE_RADIUS_MI; }
+function textExplainsFar(addr){
+  return /,/.test(addr) || /\b\d{5}(-\d{4})?\b/.test(addr) ||
+    /\b(nc|sc|ga|tn|va|wv|ky|oh|fl|al|north carolina|south carolina|georgia|tennessee|virginia|west virginia|kentucky|ohio|florida|alabama)\b/i.test(addr);
+}
+async function arcgisCandidates(addr){
+  // ArcGIS World Geocoder — strong on US residential street addresses
+  // (OpenStreetMap is missing many smaller Shelby streets, so it is fallback.)
   try{
-    const u="https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=US&outFields=Match_addr&singleLine="+encodeURIComponent(addr);
+    const u="https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=5&countryCode=US&outFields=Match_addr&location="+SERVICE_CENTER.lon+","+SERVICE_CENTER.lat+"&singleLine="+encodeURIComponent(addr);
     const res=await fetch(u); const data=await res.json();
-    if(data && data.candidates && data.candidates.length && data.candidates[0].score>=85){
-      const c=data.candidates[0]; return { lat:c.location.y, lon:c.location.x };
-    }
-  }catch(e){ /* fall through to fallback */ }
-  // Fallback: OpenStreetMap Nominatim — good for landmarks and named places
+    if(data && data.candidates) return data.candidates.filter(c=>c.score>=80).map(c=>({ lat:c.location.y, lon:c.location.x }));
+  }catch(e){ /* fall through */ }
+  return [];
+}
+async function nominatimPt(addr, bounded){
+  // OpenStreetMap Nominatim — good for landmarks and named places
   try{
-    const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q="+encodeURIComponent(addr);
+    let url="https://nominatim.openstreetmap.org/search?format=json&limit=3&countrycodes=us&q="+encodeURIComponent(addr);
+    if(bounded) url+="&viewbox="+NOM_VIEWBOX+"&bounded=1";
     const res=await fetch(url,{headers:{"Accept":"application/json"}});
     const data=await res.json();
-    if(data&&data.length) return { lat:parseFloat(data[0].lat), lon:parseFloat(data[0].lon) };
+    if(data && data.length){
+      const pts=data.map(d=>({ lat:parseFloat(d.lat), lon:parseFloat(d.lon) }));
+      pts.sort((x,y)=>haversineMi(SERVICE_CENTER,x)-haversineMi(SERVICE_CENTER,y));
+      return pts[0]; // nearest to the service area wins
+    }
   }catch(e){ /* fall through */ }
+  return null;
+}
+// One resolution pass: { best, local } — best = top match anywhere,
+// local = best match inside the service region (or null).
+async function geocodeOnce(addr){
+  const cands=await arcgisCandidates(addr);
+  if(cands.length){
+    const local=cands.find(c=>withinService(c)) || null;
+    return { best:{ lat:cands[0].lat, lon:cands[0].lon }, local };
+  }
+  const nb=await nominatimPt(addr, true);
+  if(nb) return { best:nb, local: withinService(nb) ? nb : null };
+  const nu=await nominatimPt(addr, false);
+  if(nu) return { best:nu, local: withinService(nu) ? nu : null };
+  return null;
+}
+// Returns {lat,lon} | {farAway:true} | null
+async function geocode(addr){
+  const r=await geocodeOnce(addr);
+  if(textExplainsFar(addr)) return r ? r.best : null; // rider named the place — price it, however far
+  if(r && r.local) return r.local;
+  if(!/shelby/i.test(addr)){
+    // Prefer a local street match (e.g. Earl Street, Shelby) over any far match
+    const retry=await geocodeOnce(addr+", Shelby, NC");
+    if(retry && retry.local) return retry.local;
+  }
+  if(r && r.best) return { farAway:true }; // only a far match — never price it silently
   return null;
 }
 // ===== ADDRESS AUTOCOMPLETE (added Nov 5, 2026 — David's request) =====
@@ -383,10 +438,10 @@ function renderStopFields(){
     const key="stop"+i;
     picked[key]=null;
     const lab=document.createElement("label");
-    lab.setAttribute("for",key); lab.textContent="Stop "+i+" address";
+    lab.setAttribute("for",key); lab.textContent="Stop "+i+" address (street, city, state)";
     const aw=document.createElement("div"); aw.className="addr-wrap";
     const inp=document.createElement("input");
-    inp.id=key; inp.type="text"; inp.placeholder="Start typing — then tap the stop address"; inp.setAttribute("autocomplete","off");
+    inp.id=key; inp.type="text"; inp.placeholder="Street, city, state — start typing, then tap the stop address"; inp.setAttribute("autocomplete","off");
     const sug=document.createElement("div"); sug.className="suggest"; sug.id=key+"Suggest";
     aw.appendChild(inp); aw.appendChild(sug);
     wrap.appendChild(lab); wrap.appendChild(aw);
@@ -447,6 +502,7 @@ async function calculate(){
       return (picked[k]&&picked[k].label===t)?Promise.resolve(picked[k].pt):geocode(t); });
     const resAll=await Promise.all([pa,pb,...sps]);
     const a=resAll[0], b=resAll[1], stopPts=resAll.slice(2);
+    if([a,b,...stopPts].some(p=>p&&p.farAway)){ showError("errorBox","We couldn't find that address nearby — please add the city and state so we can price it accurately."); return; }
     if(!a||!b||stopPts.some(p=>!p)){ showError("errorBox","We couldn't find one of those addresses. Check the spelling, add the city and state, and try again — or call 980-470-7973."); return; }
     const r=await routePath([a,...stopPts,b]);
     if(!r){ showError("errorBox","We couldn't route that trip. Call 980-470-7973 and we'll quote you by phone."); return; }
